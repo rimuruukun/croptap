@@ -1,6 +1,8 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
+import { initializeFirestoreWithCache } from "../../firestore/initFirestore";
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -12,6 +14,8 @@ const firebaseConfig = {
 };
 
 const requiredConfigKeys = ["apiKey", "authDomain", "projectId", "appId"];
+
+export const firebaseProjectId = firebaseConfig.projectId || "";
 
 export function ensureFirebaseAuthConfig() {
   const missingKeys = requiredConfigKeys.filter(
@@ -28,4 +32,10 @@ export function ensureFirebaseAuthConfig() {
 const firebaseApp =
   getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
+export { firebaseApp };
 export const firebaseAuth = getAuth(firebaseApp);
+
+const { firestore, status } = initializeFirestoreWithCache(firebaseApp);
+
+export const firebaseDb = firestore;
+export const firestoreCacheStatus = status;

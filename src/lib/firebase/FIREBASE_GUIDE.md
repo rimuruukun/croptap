@@ -76,6 +76,8 @@ Notes:
 - In Vite, client-side env vars must start with `VITE_`.
 - Firebase web config values are not treated as private secrets, but keep your project controlled and rules strict.
 - If Analytics is not enabled, `VITE_FIREBASE_MEASUREMENT_ID` can be omitted.
+- On the Firebase free plan, skip Cloud Functions entirely.
+- The current sync secret flow uses a client-derived, best-effort secret so the app can run without an upgraded Firebase plan.
 
 ## 6. Verify Firebase Project Settings (Recommended)
 
@@ -116,5 +118,6 @@ After this Firebase console setup is done, the next implementation phase is:
 3. Add auth provider helpers (Google provider)
 4. Build auth services (sign up, sign in, sign out)
 5. Add auth state listener and persistence strategy for PWA
+6. Leave Cloud Functions unused unless you later upgrade Firebase
 
 This guide intentionally stops before coding, as requested.

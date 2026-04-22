@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  loadGameSnapshot,
-  saveGameSnapshot,
-} from "../lib/storage/indexedDbGameStore";
+  readVerifiedGameState,
+  writeLocalGameState,
+} from "../sync/writeGateway";
 import { createDefaultSnapshot, normalizeSnapshot } from "./offlineGameState";
 
 const DEFAULT_AUTOSAVE_DELAY_MS = 800;
@@ -127,7 +127,7 @@ export function useOfflineGamePersistence({
 
       try {
         const storedSnapshot = await withTimeout(
-          loadGameSnapshot(ownerUid),
+          readVerifiedGameState(ownerUid),
           HYDRATION_LOAD_TIMEOUT_MS,
           "Local save hydration timed out. Continuing with default progress.",
         );
@@ -137,7 +137,7 @@ export function useOfflineGamePersistence({
         }
 
         const normalized = normalizeSnapshot(
-          storedSnapshot ?? createDefaultSnapshot(),
+          storedSnapshot?.snapshot ?? createDefaultSnapshot(),
         );
 
         onHydrate(normalized);
@@ -191,7 +191,9 @@ export function useOfflineGamePersistence({
 
       try {
         await withTimeout(
-          saveGameSnapshot(ownerUid, snapshotToSave),
+          writeLocalGameState(ownerUid, snapshotToSave, {
+            reason: "autosave_snapshot",
+          }),
           SAVE_TIMEOUT_MS,
           "Local save write timed out. Progress will retry on next autosave.",
         );

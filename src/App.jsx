@@ -25,10 +25,6 @@ import ManagementSection from "./app/sections/ManagementSection";
 import SettingsSection from "./app/sections/SettingsSection";
 import { getPurchasePlan } from "./app/utils";
 import { getCropByStage, getCropHP } from "./features/crops/cropsData";
-import {
-  getLocalMutationQueueCount,
-  queueLocalMutation,
-} from "./features/offline/localMutationQueue";
 import { useNetworkStatus } from "./features/offline/useNetworkStatus";
 import { usePwaInstallPrompt } from "./features/offline/usePwaInstallPrompt";
 import PublicOnlyRoute from "./routes/PublicOnlyRoute";
@@ -53,6 +49,7 @@ import {
   signOutFirebaseUser,
   subscribeToFirebaseAuthState,
 } from "./lib/firebase/authentication/services/emailPasswordAuthService";
+import { useSyncRuntime } from "./sync/useSyncRuntime";
 
 const BOSS_TIMER_DURATION_MS = 30000;
 
@@ -215,25 +212,19 @@ function App() {
     [location.pathname],
   );
 
-  const recordMutation = useCallback(
-    (type, payload = {}, metadata = {}) => {
-      if (!ownerUid) {
-        return;
-      }
+  const recordMutation = useCallback(() => {
+    if (!ownerUid) {
+      return;
+    }
 
-      queueLocalMutation(ownerUid, type, payload, metadata)
-        .then(({ mutation, queueLength }) => {
-          setPendingMutationCount(queueLength);
-          setSyncMeta((current) => ({
-            ...current,
-            localRevision: current.localRevision + 1,
-            lastMutationAt: mutation.createdAt,
-          }));
-        })
-        .catch(() => {});
-    },
-    [ownerUid],
-  );
+    const mutationTimestamp = Date.now();
+
+    setSyncMeta((current) => ({
+      ...current,
+      localRevision: current.localRevision + 1,
+      lastMutationAt: mutationTimestamp,
+    }));
+  }, [ownerUid]);
 
   const applyHydratedSnapshot = useCallback((snapshot) => {
     const runtime = snapshotToRuntime(snapshot);
@@ -336,7 +327,24 @@ function App() {
     enabled: Boolean(ownerUid),
   });
 
+  const { isSyncing, syncError, lastSyncAt, syncStatus } = useSyncRuntime({
+    ownerUid,
+    isHydrated,
+    onRemoteSnapshot: applyHydratedSnapshot,
+  });
+
   const isSessionReady = !isHydrating && isHydrated && isAuthInitialized;
+
+  useEffect(() => {
+    if (!lastSyncAt) {
+      return;
+    }
+
+    setSyncMeta((current) => ({
+      ...current,
+      lastSyncedAt: lastSyncAt,
+    }));
+  }, [lastSyncAt]);
 
   useEffect(() => {
     let isDisposed = false;
@@ -406,23 +414,11 @@ function App() {
   useEffect(() => {
     if (!isHydrated || !ownerUid) {
       setPendingMutationCount(0);
-      return undefined;
+      return;
     }
 
-    let isCancelled = false;
-
-    getLocalMutationQueueCount(ownerUid)
-      .then((count) => {
-        if (!isCancelled) {
-          setPendingMutationCount(count);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isHydrated, ownerUid]);
+    setPendingMutationCount(syncStatus?.hasPendingWrites ? 1 : 0);
+  }, [isHydrated, ownerUid, syncStatus?.hasPendingWrites]);
 
   const autoTapRate = useMemo(
     () =>
@@ -1092,7 +1088,7 @@ function App() {
     ],
   );
 
-  const persistenceError = hydrationError || saveError;
+  const persistenceError = hydrationError || saveError || syncError;
 
   const loadingFallback = (
     <HydrationLoadingScreen
