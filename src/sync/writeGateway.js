@@ -14,6 +14,7 @@ import { getUserSyncSecret } from "../security/secretManager";
 import { signPayload, verifyPayloadSignature } from "../security/signing";
 import { normalizeSnapshot } from "../state/offlineGameState";
 import { scheduleFirestoreGameStateFlush } from "./firestoreWriteDispatcher";
+import { coerceUpdatedAt } from "./coerceUpdatedAt";
 
 function cloneSerializable(value) {
   return JSON.parse(JSON.stringify(value));
@@ -211,7 +212,7 @@ export async function applyServerGameState(ownerUid, serverDocument) {
 
   const secretBytes = await getUserSyncSecret(normalizedOwnerUid);
   const payload = cloneSerializable(serverDocument.payload ?? {});
-  const updatedAt = Number(serverDocument.updatedAt ?? Date.now());
+  const updatedAt = coerceUpdatedAt(serverDocument.updatedAt, Date.now());
   const version = getSafeVersion(serverDocument.schemaVersion);
   const isDeleted = Boolean(serverDocument.deleted);
 

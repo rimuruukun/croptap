@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
+import { doc, getDocFromServer } from "firebase/firestore";
 
 import { clearUserSyncSecret, loadUserSyncSecret } from "../security";
 import { getPendingSyncOperations, markQueueOperationMigrated } from "../db/syncQueueTable";
+import { getGameStateRecord } from "../db/gameStateTable";
+import { firebaseAuth, firebaseDb } from "../lib/firebase/authentication/config/firebaseAuth";
 import { startUserGameStateListener } from "./firestoreListener";
 import { scheduleFirestoreGameStateFlush, disposeFirestoreWriteCoordinator } from "./firestoreWriteDispatcher";
 import { createInitialSyncStatus } from "./syncStatus";
+import {
+  FIRESTORE_GAME_DATA_COLLECTION,
+  FIRESTORE_GAME_STATE_DOC_ID,
+  FIRESTORE_USERS_COLLECTION,
+} from "./constants";
+import { coerceUpdatedAt } from "./coerceUpdatedAt";
+import { applyServerGameState } from "./writeGateway";
 
 function createNoop() {
   return () => {};
@@ -80,6 +90,64 @@ export function useSyncRuntime({ ownerUid, isHydrated, onRemoteSnapshot }) {
           setSyncError(
             getErrorMessage(error, "Failed to start realtime sync listener."),
           );
+        }
+      }
+
+      try {
+        const currentUser = firebaseAuth.currentUser;
+        if (currentUser && currentUser.uid === ownerUid) {
+          const gameStateDocRef = doc(
+            firebaseDb,
+            FIRESTORE_USERS_COLLECTION,
+            ownerUid,
+            FIRESTORE_GAME_DATA_COLLECTION,
+            FIRESTORE_GAME_STATE_DOC_ID,
+          );
+
+          const serverSnapshot = await getDocFromServer(gameStateDocRef);
+
+          if (!isDisposed && serverSnapshot.exists()) {
+            const localRecord = await getGameStateRecord(ownerUid);
+            const localUpdatedAt = coerceUpdatedAt(localRecord?._updatedAt, 0);
+            const localServerUpdatedAt = coerceUpdatedAt(
+              localRecord?._serverUpdatedAt,
+              0,
+            );
+            const serverUpdatedAt = coerceUpdatedAt(
+              serverSnapshot.data()?.updatedAt,
+              0,
+            );
+
+            if (serverUpdatedAt > Math.max(localUpdatedAt, localServerUpdatedAt)) {
+              const runtime = await applyServerGameState(
+                ownerUid,
+                serverSnapshot.data(),
+              );
+
+              if (runtime && typeof onRemoteSnapshot === "function") {
+                onRemoteSnapshot(runtime);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (!isDisposed) {
+          const message = getErrorMessage(
+            error,
+            "Failed to fetch latest save from server.",
+          );
+          setSyncError(message);
+          setSyncStatus((current) => ({
+            ...current,
+            lastError: message,
+          }));
+        }
+      } finally {
+        if (!isDisposed) {
+          setSyncStatus((current) => ({
+            ...current,
+            initialFetchComplete: true,
+          }));
         }
       }
 

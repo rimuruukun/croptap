@@ -57,12 +57,13 @@ function HydrationLoadingScreen({
   hydrationError,
   forceHydrationFallback,
   isHydrationWatchdogTriggered,
+  message = "Loading local save data...",
 }) {
   return (
     <div className="wf-page wf-page-loading">
       <div className="wf-loading-card">
         <h1>CropTap</h1>
-        <p>Loading local save data...</p>
+        <p>{message}</p>
         {hydrationError ? (
           <p className="wf-loading-error">{hydrationError}</p>
         ) : null}
@@ -333,7 +334,44 @@ function App() {
     onRemoteSnapshot: applyHydratedSnapshot,
   });
 
+  const [isPostLoginLoading, setIsPostLoginLoading] = useState(false);
+
   const isSessionReady = !isHydrating && isHydrated && isAuthInitialized;
+  const isAppReady = isSessionReady && !isPostLoginLoading;
+
+  useEffect(() => {
+    if (!ownerUid || !isAuthInitialized) {
+      setIsPostLoginLoading(false);
+      return;
+    }
+
+    setIsPostLoginLoading(true);
+  }, [isAuthInitialized, ownerUid]);
+
+  useEffect(() => {
+    if (!isPostLoginLoading) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const timeoutId = window.setTimeout(() => {
+      if (!isCancelled) {
+        setIsPostLoginLoading(false);
+      }
+    }, 5000);
+
+    if (syncStatus?.initialFetchComplete) {
+      window.clearTimeout(timeoutId);
+      setIsPostLoginLoading(false);
+      return undefined;
+    }
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isPostLoginLoading, syncStatus?.initialFetchComplete]);
 
   useEffect(() => {
     if (!lastSyncAt) {
@@ -1098,15 +1136,28 @@ function App() {
     />
   );
 
+  const postLoginLoadingFallback = (
+    <HydrationLoadingScreen
+      hydrationError={syncError}
+      forceHydrationFallback={() => setIsPostLoginLoading(false)}
+      isHydrationWatchdogTriggered={false}
+      message="Syncing account data..."
+    />
+  );
+
+  const activeLoadingFallback = isPostLoginLoading
+    ? postLoginLoadingFallback
+    : loadingFallback;
+
   return (
     <Routes>
       <Route
         element={
           <PublicOnlyRoute
             isLoggedIn={isLoggedIn}
-            isSessionReady={isSessionReady}
+            isSessionReady={isAppReady}
             redirectTo={postLoginRedirectPath}
-            loadingFallback={loadingFallback}
+            loadingFallback={activeLoadingFallback}
           />
         }
       >
@@ -1129,8 +1180,8 @@ function App() {
         element={
           <ProtectedRoute
             isLoggedIn={isLoggedIn}
-            isSessionReady={isSessionReady}
-            loadingFallback={loadingFallback}
+            isSessionReady={isAppReady}
+            loadingFallback={activeLoadingFallback}
           />
         }
       >
