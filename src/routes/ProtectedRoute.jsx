@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
-import { loginRoutePath } from "../app/constants";
+import { loginRoutePath } from "../features/game/config/constants";
 
 function ProtectedRoute({
   isLoggedIn,

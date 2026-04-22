@@ -6,7 +6,7 @@ This document is the source-of-truth mapping for CropTap local IndexedDB and rem
 
 - One canonical per-user business document: `gameState`.
 - Supporting profile fields live in `users/{uid}`.
-- Local-only queue table: `syncQueue`.
+- Local-only compatibility table: `syncQueue` (legacy outbox, not used by active runtime path).
 
 ## Required Local Sync Metadata (All Business Records)
 
@@ -24,7 +24,7 @@ Every business record persisted in local IndexedDB must include:
 | ------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
 | `gameState`              | Authoritative per-user gameplay snapshot (currencies, progression, inventory, settings, sync/meta) | table: `gameState`, key: `id=uid::gameState`                | doc: `users/{uid}/gameData/gameState` | required, immutable | LWW by `_updatedAt` vs server `updatedAt`; local force-push only when local is newer |
 | `userProfile`            | Display-only profile metadata used by client and rules checks                                      | denormalized in `gameState.player` and optional local cache | doc: `users/{uid}`                    | required, immutable | server-wins for profile fields; local cache updated by listener                      |
-| `syncQueue` (local-only) | Ordered outbox of pending writes/deletes                                                           | table: `syncQueue`, key: auto increment `queueId`           | none                                  | required per row    | retry in created-at order; mark `conflict` after max retries                         |
+| `syncQueue` (local-only) | Legacy outbox retained for compatibility and migration-only workflows                              | table: `syncQueue`, key: auto increment `queueId`           | none                                  | required per row    | legacy queue rules only when explicitly migrated                                     |
 
 ## Canonical GameState Shape
 
@@ -57,14 +57,14 @@ Every business record persisted in local IndexedDB must include:
 
 ## Path Mapping Matrix
 
-| Local Table/Path                       | Firestore Document/Path          | Ownership          | Sync Direction | Conflict Rule            |
-| -------------------------------------- | -------------------------------- | ------------------ | -------------- | ------------------------ |
-| `gameState[id=uid::gameState].payload` | `users/{uid}/gameData/gameState` | `ownerUid === uid` | bi-directional | LWW by timestamps        |
-| `gameState[id=uid::gameState].player`  | `users/{uid}` subset mirror      | `ownerUid === uid` | pull-preferred | server-wins              |
-| `syncQueue[queueId].operation`         | none (transport only)            | `ownerUid === uid` | push-only      | ordered retries with cap |
+| Local Table/Path                       | Firestore Document/Path          | Ownership          | Sync Direction | Conflict Rule           |
+| -------------------------------------- | -------------------------------- | ------------------ | -------------- | ----------------------- |
+| `gameState[id=uid::gameState].payload` | `users/{uid}/gameData/gameState` | `ownerUid === uid` | bi-directional | LWW by timestamps       |
+| `gameState[id=uid::gameState].player`  | `users/{uid}` subset mirror      | `ownerUid === uid` | pull-preferred | server-wins             |
+| `syncQueue[queueId].operation`         | none (transport only)            | `ownerUid === uid` | legacy-only    | migration-only behavior |
 
 ## Notes
 
 - Client-side signing/tamper checks are best effort; server-side rules and function validation are authoritative.
-- `syncQueue` is never mirrored to Firestore.
+- `syncQueue` is never mirrored to Firestore and is no longer part of the primary runtime sync path.
 - Canonical table version must be bumped for schema/rules changes.

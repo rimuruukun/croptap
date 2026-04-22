@@ -1,0 +1,130 @@
+import { useEffect, useRef, useState } from "react";
+
+import { clearUserSyncSecret, loadUserSyncSecret } from "../../security";
+import { startUserGameStateListener } from "../firestore/firestoreListener";
+import {
+  disposeFirestoreWriteCoordinator,
+  scheduleFirestoreGameStateFlush,
+} from "../firestore/firestoreWriteDispatcher";
+import { createInitialSyncStatus } from "../status/syncStatus";
+
+function createNoop() {
+  return () => {};
+}
+
+function getErrorMessage(error, fallback) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+export function useSyncRuntime({ ownerUid, isHydrated, onRemoteSnapshot }) {
+  const [syncError, setSyncError] = useState("");
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [syncStatus, setSyncStatus] = useState(createInitialSyncStatus());
+  const triggerRemoteFlushRef = useRef(async () => {});
+
+  useEffect(() => {
+    if (!ownerUid || !isHydrated) {
+      setSyncError("");
+      setLastSyncAt(null);
+      setSyncStatus(createInitialSyncStatus());
+      triggerRemoteFlushRef.current = async () => {};
+      return createNoop();
+    }
+
+    let isDisposed = false;
+    let unsubscribe = createNoop();
+
+    const handleOnline = () => {
+      scheduleFirestoreGameStateFlush(ownerUid, "online_retry");
+    };
+
+    const initialize = async () => {
+      try {
+        await loadUserSyncSecret(ownerUid);
+      } catch (error) {
+        if (!isDisposed) {
+          setSyncError(
+            getErrorMessage(error, "Failed to load sync secret for this user."),
+          );
+        }
+        return;
+      }
+
+      if (isDisposed) {
+        return;
+      }
+
+      try {
+        unsubscribe = startUserGameStateListener({
+          ownerUid,
+          onRemoteSnapshot,
+          onStatus: setSyncStatus,
+          onError: (error) => {
+            if (!isDisposed) {
+              const message = getErrorMessage(
+                error,
+                "Realtime sync listener encountered an error.",
+              );
+              setSyncError(message);
+              setSyncStatus((current) => ({
+                ...current,
+                lastError: message,
+              }));
+            }
+          },
+        });
+
+        triggerRemoteFlushRef.current = async () => {
+          scheduleFirestoreGameStateFlush(ownerUid, "manual_trigger");
+        };
+
+        scheduleFirestoreGameStateFlush(ownerUid, "startup_flush");
+        window.addEventListener("online", handleOnline);
+      } catch (error) {
+        if (!isDisposed) {
+          setSyncError(
+            getErrorMessage(error, "Failed to start realtime sync listener."),
+          );
+        }
+      } finally {
+        if (!isDisposed) {
+          setSyncStatus((current) => ({
+            ...current,
+            initialFetchComplete: true,
+          }));
+        }
+      }
+    };
+
+    void initialize();
+
+    return () => {
+      isDisposed = true;
+      window.removeEventListener("online", handleOnline);
+
+      unsubscribe();
+      disposeFirestoreWriteCoordinator(ownerUid);
+      clearUserSyncSecret(ownerUid);
+    };
+  }, [isHydrated, onRemoteSnapshot, ownerUid]);
+
+  useEffect(() => {
+    if (!syncStatus?.lastRemoteApplyAt) {
+      return;
+    }
+
+    setLastSyncAt(syncStatus.lastRemoteApplyAt);
+  }, [syncStatus?.lastRemoteApplyAt]);
+
+  return {
+    isSyncing: Boolean(syncStatus?.hasPendingWrites),
+    syncError,
+    lastSyncAt,
+    syncStatus,
+    triggerSync: async () => triggerRemoteFlushRef.current(),
+  };
+}

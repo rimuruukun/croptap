@@ -1,4 +1,7 @@
-import { initialFarmers, initialTapUpgrades } from "../app/constants";
+import {
+  initialFarmers,
+  initialTapUpgrades,
+} from "../features/game/config/constants";
 import { getCropHP } from "../features/crops/cropsData";
 
 export const GAME_SAVE_VERSION = 1;
@@ -27,6 +30,13 @@ const sanitizeManagementTab = (value) =>
   VALID_MANAGEMENT_TABS.has(value) ? value : "tools";
 const sanitizeBuyQuantity = (value) =>
   VALID_BUY_QUANTITIES.has(value) ? value : 1;
+const sanitizeBoolean = (value, fallback = false) =>
+  typeof value === "boolean" ? value : fallback;
+const sanitizeVolume = (value, fallback = 0.5) => {
+  const numericValue = sanitizeNumber(value, fallback);
+
+  return Math.max(0, Math.min(1, numericValue));
+};
 const readSettingWithLegacyFallback = (snapshot, key) =>
   snapshot?.settings?.[key] ?? snapshot?.[key];
 
@@ -133,6 +143,11 @@ export function createDefaultSnapshot() {
       buyQuantity: 1,
       activeItem: "battle",
       managementTab: "tools",
+      isSoundMasterMuted: false,
+      isBgmEnabled: true,
+      isSfxEnabled: true,
+      bgmVolume: 0.42,
+      sfxVolume: 0.5,
     },
     sync: {
       localRevision: 0,
@@ -212,6 +227,26 @@ export function normalizeSnapshot(snapshot) {
       managementTab: sanitizeManagementTab(
         readSettingWithLegacyFallback(snapshot, "managementTab"),
       ),
+      isSoundMasterMuted: sanitizeBoolean(
+        readSettingWithLegacyFallback(snapshot, "isSoundMasterMuted"),
+        base.settings.isSoundMasterMuted,
+      ),
+      isBgmEnabled: sanitizeBoolean(
+        readSettingWithLegacyFallback(snapshot, "isBgmEnabled"),
+        base.settings.isBgmEnabled,
+      ),
+      isSfxEnabled: sanitizeBoolean(
+        readSettingWithLegacyFallback(snapshot, "isSfxEnabled"),
+        base.settings.isSfxEnabled,
+      ),
+      bgmVolume: sanitizeVolume(
+        readSettingWithLegacyFallback(snapshot, "bgmVolume"),
+        base.settings.bgmVolume,
+      ),
+      sfxVolume: sanitizeVolume(
+        readSettingWithLegacyFallback(snapshot, "sfxVolume"),
+        base.settings.sfxVolume,
+      ),
     },
     sync: {
       localRevision: Math.max(
@@ -245,6 +280,11 @@ export function snapshotToRuntime(snapshot) {
     buyQuantity: normalized.settings.buyQuantity,
     activeItem: normalized.settings.activeItem,
     managementTab: normalized.settings.managementTab,
+    isSoundMasterMuted: normalized.settings.isSoundMasterMuted,
+    isBgmEnabled: normalized.settings.isBgmEnabled,
+    isSfxEnabled: normalized.settings.isSfxEnabled,
+    bgmVolume: normalized.settings.bgmVolume,
+    sfxVolume: normalized.settings.sfxVolume,
     syncMeta: normalized.sync,
     lastSavedAt: normalized.meta.savedAt,
   };
@@ -300,6 +340,11 @@ export function buildSnapshotFromRuntime(runtimeState) {
       buyQuantity: sanitizeBuyQuantity(runtimeState.buyQuantity),
       activeItem: sanitizeActiveItem(runtimeState.activeItem),
       managementTab: sanitizeManagementTab(runtimeState.managementTab),
+      isSoundMasterMuted: sanitizeBoolean(runtimeState.isSoundMasterMuted),
+      isBgmEnabled: sanitizeBoolean(runtimeState.isBgmEnabled, true),
+      isSfxEnabled: sanitizeBoolean(runtimeState.isSfxEnabled, true),
+      bgmVolume: sanitizeVolume(runtimeState.bgmVolume, 0.42),
+      sfxVolume: sanitizeVolume(runtimeState.sfxVolume, 0.5),
     },
     sync: {
       localRevision: Math.max(

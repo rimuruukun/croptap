@@ -3,7 +3,7 @@ import {
   defaultMobileRoutePath,
   sectionIdByPath,
   sectionPathById,
-} from "../app/constants";
+} from "../features/game/config/constants";
 
 export const sectionRouteEntries = Object.freeze([
   { id: "battle", path: sectionPathById.battle },

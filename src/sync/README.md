@@ -1,12 +1,25 @@
-# Sync Layer
+# src/sync
 
-This folder contains local write gateway, queue processor, and Firestore listener wiring.
+## What this folder is for
 
-## Files
+Synchronization subsystem that coordinates local canonical state with Firestore.
 
-- constants.js: Sync operation constants, retry policy, and Firestore path constants.
-- writeGateway.js: `writeLocal`/`deleteLocal` behavior for game state with signing, encryption, and queue enqueueing.
-- syncEngine.js: Queue processing, Firestore upsert/delete operations, retries, and conflict handling.
-- firestoreListener.js: User-scoped Firestore pull listener and local apply logic.
-- useSyncRuntime.js: React runtime hook for secret load, listener startup, online triggers, and periodic sync.
-- index.js: Barrel exports for sync modules.
+## Subfolders and what they do
+
+- firestore/: Firestore listener and write-dispatch coordination modules.
+- gateway/: Gateway for local canonical reads/writes, signing, and remote apply behavior.
+- runtime/: Runtime hook that boots sync lifecycle based on auth and hydration state.
+- status/: Sync status model helpers used by UI and runtime.
+- utils/: Small sync utility helpers.
+
+## Files in this folder
+
+- constants.js: This is a JavaScript file in src/sync. Its main purpose is this: save and online update constants and the online database path constants used across save and online update modules. It handles the day-to-day tasks for this area, so nearby files can rely on one clear place for this work. Without this file, this part of the app would miss an important step and features here could break or behave in confusing ways.
+- index.js: This is a JavaScript file in src/sync. Its main purpose is this: shared exports for save and online update modules. It handles the day-to-day tasks for this area, so nearby files can rely on one clear place for this work. Without this file, this part of the app would miss an important step and features here could break or behave in confusing ways.
+## Student tips
+
+- Start from this README, then open the files listed above in order.
+- If you change responsibilities in this folder, update this README in the same commit.
+- Prefer small, focused edits so behavior stays easy to reason about.
+
+

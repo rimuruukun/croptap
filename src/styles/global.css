@@ -588,6 +588,41 @@ button {
   color: #666666;
 }
 
+.wf-settings-sound-controls {
+  margin-top: 4px;
+  border-top: 1px solid #d8d8d8;
+  padding-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.wf-settings-sound-controls h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.wf-settings-control-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.wf-settings-control-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #5a7186;
+  cursor: pointer;
+}
+
+.wf-settings-control-row input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #5a7186;
+}
+
 .wf-main {
   height: 100%;
   padding: 8px 4px;

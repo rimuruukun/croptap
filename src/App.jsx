@@ -14,17 +14,31 @@ import {
   getPathForSection,
   loginRoutePath,
   mobileNavItems,
-} from "./app/constants";
-import LoginPage from "./app/components/LoginPage";
-import SharedHeader from "./app/components/SharedHeader";
-import SharedNavigation from "./app/components/SharedNavigation";
-import SimpleSection from "./app/components/SimpleSection";
-import BattleSection from "./app/sections/BattleSection";
-import EventSection from "./app/sections/EventSection";
-import ManagementSection from "./app/sections/ManagementSection";
-import SettingsSection from "./app/sections/SettingsSection";
-import { getPurchasePlan } from "./app/utils";
+} from "./features/game/config/constants";
+import LoginPage from "./ui/auth/LoginPage";
+import SharedHeader from "./ui/shell/SharedHeader";
+import SharedNavigation from "./ui/shell/SharedNavigation";
+import SimpleSection from "./ui/common/SimpleSection";
+import BattleSection from "./features/game/sections/BattleSection";
+import EventSection from "./features/game/sections/EventSection";
+import ManagementSection from "./features/game/sections/ManagementSection";
+import SettingsSection from "./features/game/sections/SettingsSection";
+import { getPurchasePlan } from "./features/game/utils/economy";
 import { getCropByStage, getCropHP } from "./features/crops/cropsData";
+import {
+  pauseBackgroundMusic,
+  playBackgroundMusic,
+  registerBackgroundMusicUnlock,
+  setBackgroundMusicEnabled,
+  setBackgroundMusicMasterMuted,
+  setBackgroundMusicVolume,
+} from "./features/game/audio/backgroundMusic";
+import {
+  playTapHitSound,
+  setTapHitSoundEnabled,
+  setTapHitSoundMasterMuted,
+  setTapHitSoundVolume,
+} from "./features/game/audio/tapHitSound";
 import { useNetworkStatus } from "./features/offline/useNetworkStatus";
 import { usePwaInstallPrompt } from "./features/offline/usePwaInstallPrompt";
 import PublicOnlyRoute from "./routes/PublicOnlyRoute";
@@ -49,7 +63,7 @@ import {
   signOutFirebaseUser,
   subscribeToFirebaseAuthState,
 } from "./lib/firebase/authentication/services/emailPasswordAuthService";
-import { useSyncRuntime } from "./sync/useSyncRuntime";
+import { useSyncRuntime } from "./sync/runtime/useSyncRuntime";
 
 const BOSS_TIMER_DURATION_MS = 30000;
 
@@ -97,7 +111,7 @@ function ProtectedAppLayout({
   isSaving,
   hasUnsavedChanges,
   lastSavedAt,
-  pendingMutationCount,
+  syncStatus,
   persistenceError,
   battleSection,
 }) {
@@ -113,7 +127,7 @@ function ProtectedAppLayout({
           isSaving={isSaving}
           hasUnsavedChanges={hasUnsavedChanges}
           lastSavedAt={lastSavedAt}
-          pendingMutationCount={pendingMutationCount}
+          syncStatus={syncStatus}
           persistenceError={persistenceError}
         />
 
@@ -143,7 +157,7 @@ function ProtectedAppLayout({
         isSaving={isSaving}
         hasUnsavedChanges={hasUnsavedChanges}
         lastSavedAt={lastSavedAt}
-        pendingMutationCount={pendingMutationCount}
+        syncStatus={syncStatus}
         persistenceError={persistenceError}
       />
 
@@ -179,6 +193,13 @@ function App() {
   const [managementTab, setManagementTab] = useState(
     defaultRuntime.managementTab,
   );
+  const [isSoundMasterMuted, setIsSoundMasterMuted] = useState(
+    defaultRuntime.isSoundMasterMuted,
+  );
+  const [isBgmEnabled, setIsBgmEnabled] = useState(defaultRuntime.isBgmEnabled);
+  const [isSfxEnabled, setIsSfxEnabled] = useState(defaultRuntime.isSfxEnabled);
+  const [bgmVolume, setBgmVolume] = useState(defaultRuntime.bgmVolume);
+  const [sfxVolume, setSfxVolume] = useState(defaultRuntime.sfxVolume);
   const [isDesktopLayout, setIsDesktopLayout] = useState(false);
 
   const [coins, setCoins] = useState(defaultRuntime.coins);
@@ -193,7 +214,6 @@ function App() {
   const [maxHP, setMaxHP] = useState(defaultRuntime.maxHP);
 
   const [syncMeta, setSyncMeta] = useState(defaultRuntime.syncMeta);
-  const [pendingMutationCount, setPendingMutationCount] = useState(0);
 
   const [timerPercent, setTimerPercent] = useState(100);
   const [hpTrailPercent, setHpTrailPercent] = useState(100);
@@ -244,6 +264,11 @@ function App() {
 
     setActiveItem(runtime.activeItem);
     setManagementTab(runtime.managementTab);
+    setIsSoundMasterMuted(runtime.isSoundMasterMuted);
+    setIsBgmEnabled(runtime.isBgmEnabled);
+    setIsSfxEnabled(runtime.isSfxEnabled);
+    setBgmVolume(runtime.bgmVolume);
+    setSfxVolume(runtime.sfxVolume);
 
     setCurrentStage(runtime.currentStage);
     setBossHP(runtime.bossHP);
@@ -270,7 +295,6 @@ function App() {
     applyHydratedSnapshot(
       buildSnapshotFromRuntime(createDefaultRuntimeState()),
     );
-    setPendingMutationCount(0);
   }, [applyHydratedSnapshot]);
 
   const snapshotForPersistence = useMemo(
@@ -287,6 +311,11 @@ function App() {
         buyQuantity,
         activeItem,
         managementTab,
+        isSoundMasterMuted,
+        isBgmEnabled,
+        isSfxEnabled,
+        bgmVolume,
+        sfxVolume,
         currentStage,
         bossHP,
         maxHP,
@@ -294,21 +323,56 @@ function App() {
       }),
     [
       activeItem,
+      bgmVolume,
       bossHP,
       buyQuantity,
       coins,
       currentStage,
       farmers,
       fertilizer,
+      isBgmEnabled,
       isLoggedIn,
+      isSfxEnabled,
+      isSoundMasterMuted,
       managementTab,
       maxHP,
       playerEmail,
       playerMode,
       playerName,
+      sfxVolume,
       syncMeta,
       tapUpgrades,
     ],
+  );
+
+  useEffect(() => {
+    registerBackgroundMusicUnlock();
+  }, []);
+
+  useEffect(() => {
+    setBackgroundMusicMasterMuted(isSoundMasterMuted);
+    setBackgroundMusicEnabled(isBgmEnabled);
+    setBackgroundMusicVolume(bgmVolume);
+
+    if (isSoundMasterMuted || !isBgmEnabled) {
+      pauseBackgroundMusic();
+      return;
+    }
+
+    playBackgroundMusic();
+  }, [bgmVolume, isBgmEnabled, isSoundMasterMuted]);
+
+  useEffect(() => {
+    setTapHitSoundMasterMuted(isSoundMasterMuted);
+    setTapHitSoundEnabled(isSfxEnabled);
+    setTapHitSoundVolume(sfxVolume);
+  }, [isSfxEnabled, isSoundMasterMuted, sfxVolume]);
+
+  useEffect(
+    () => () => {
+      pauseBackgroundMusic();
+    },
+    [],
   );
 
   const {
@@ -448,15 +512,6 @@ function App() {
     () => getPostLoginRedirectPath(location.state, isDesktopLayout),
     [isDesktopLayout, location.state],
   );
-
-  useEffect(() => {
-    if (!isHydrated || !ownerUid) {
-      setPendingMutationCount(0);
-      return;
-    }
-
-    setPendingMutationCount(syncStatus?.hasPendingWrites ? 1 : 0);
-  }, [isHydrated, ownerUid, syncStatus?.hasPendingWrites]);
 
   const autoTapRate = useMemo(
     () =>
@@ -611,7 +666,7 @@ function App() {
         hpTrailTargetRef.current = nextPercent;
 
         const coinsPerHit = Math.floor(autoTapRate * 0.1);
-        setCoins((value) => value + coinsPerHit);
+        //setCoins((value) => value + coinsPerHit);
 
         if (newHP <= 0) {
           setCurrentStage((stage) => {
@@ -628,7 +683,7 @@ function App() {
             return nextStage;
           });
 
-          setCoins((value) => value + Math.floor(maxHP * 2));
+          setCoins((value) => value + Math.floor(maxHP));
           return 0;
         }
 
@@ -803,6 +858,7 @@ function App() {
     }
 
     const damage = tapDamage;
+    playTapHitSound(damage);
     const newHP = bossHP - damage;
     const nextPercent = maxHP > 0 ? Math.max(0, (newHP / maxHP) * 100) : 0;
 
@@ -810,7 +866,7 @@ function App() {
     hpTrailTargetRef.current = nextPercent;
 
     const coinsPerTap = Math.floor(damage * 0.1);
-    setCoins((value) => value + coinsPerTap);
+    //setCoins((value) => value + coinsPerTap);
 
     if (newHP <= 0) {
       setCurrentStage((stage) => {
@@ -827,7 +883,7 @@ function App() {
         return nextStage;
       });
 
-      setCoins((value) => value + Math.floor(maxHP * 2));
+      setCoins((value) => value + Math.floor(maxHP));
     }
   }, [bossHP, isHydrated, maxHP, recordMutation, tapDamage]);
 
@@ -934,6 +990,16 @@ function App() {
           <SettingsSection
             isInstallAvailable={isInstallAvailable}
             isInstalled={isInstalled}
+            isSoundMasterMuted={isSoundMasterMuted}
+            isBgmEnabled={isBgmEnabled}
+            isSfxEnabled={isSfxEnabled}
+            bgmVolume={bgmVolume}
+            sfxVolume={sfxVolume}
+            onSoundMasterMutedChange={setIsSoundMasterMuted}
+            onBgmEnabledChange={setIsBgmEnabled}
+            onSfxEnabledChange={setIsSfxEnabled}
+            onBgmVolumeChange={setBgmVolume}
+            onSfxVolumeChange={setSfxVolume}
             onInstall={promptInstall}
             onLogout={handleLogout}
           />
@@ -957,9 +1023,14 @@ function App() {
       handleLogout,
       isInstallAvailable,
       isInstalled,
+      isBgmEnabled,
       managementTab,
+      bgmVolume,
       promptInstall,
       renderBattleSection,
+      isSfxEnabled,
+      isSoundMasterMuted,
+      sfxVolume,
       tapUpgrades,
     ],
   );
@@ -1020,6 +1091,16 @@ function App() {
           <SettingsSection
             isInstallAvailable={isInstallAvailable}
             isInstalled={isInstalled}
+            isSoundMasterMuted={isSoundMasterMuted}
+            isBgmEnabled={isBgmEnabled}
+            isSfxEnabled={isSfxEnabled}
+            bgmVolume={bgmVolume}
+            sfxVolume={sfxVolume}
+            onSoundMasterMutedChange={setIsSoundMasterMuted}
+            onBgmEnabledChange={setIsBgmEnabled}
+            onSfxEnabledChange={setIsSfxEnabled}
+            onBgmVolumeChange={setBgmVolume}
+            onSfxVolumeChange={setSfxVolume}
             onInstall={promptInstall}
             onLogout={handleLogout}
           />
@@ -1038,8 +1119,13 @@ function App() {
       handleLogout,
       isInstallAvailable,
       isInstalled,
+      isBgmEnabled,
+      bgmVolume,
+      isSfxEnabled,
+      isSoundMasterMuted,
       promptInstall,
       safeDefaultProtectedPath,
+      sfxVolume,
       tapUpgrades,
     ],
   );
@@ -1197,7 +1283,7 @@ function App() {
               isSaving={isSaving}
               hasUnsavedChanges={hasUnsavedChanges}
               lastSavedAt={lastSavedAt}
-              pendingMutationCount={pendingMutationCount}
+              syncStatus={syncStatus}
               persistenceError={persistenceError}
               battleSection={renderBattleSection()}
             />

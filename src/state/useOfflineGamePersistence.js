@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   readVerifiedGameState,
   writeLocalGameState,
-} from "../sync/writeGateway";
+} from "../sync/gateway/writeGateway";
 import { createDefaultSnapshot, normalizeSnapshot } from "./offlineGameState";
 
 const DEFAULT_AUTOSAVE_DELAY_MS = 800;
