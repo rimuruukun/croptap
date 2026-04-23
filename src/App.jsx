@@ -24,6 +24,7 @@ import EventSection from "./features/game/sections/EventSection";
 import ManagementSection from "./features/game/sections/ManagementSection";
 import SettingsSection from "./features/game/sections/SettingsSection";
 import { getPurchasePlan } from "./features/game/utils/economy";
+import { getEnemyDrops } from "./features/game/drops";
 import { getCropByStage, getCropHP } from "./features/crops/cropsData";
 import {
   pauseBackgroundMusic,
@@ -533,6 +534,17 @@ function App() {
     return Math.ceil(baseDamage * farmerBonusMultiplier);
   }, [tapUpgrades, farmers]);
 
+  const getEnemyKillDropCoins = useCallback(() => {
+    const { coins: droppedCoins } = getEnemyDrops({
+      maxHP,
+      stage: currentStage,
+      baseCoinMultiplier: 1,
+      bossCoinMultiplier: 1,
+    });
+
+    return droppedCoins;
+  }, [currentStage, maxHP]);
+
   useEffect(() => {
     const hydratedBossState = hydratedBossStateRef.current;
 
@@ -683,7 +695,7 @@ function App() {
             return nextStage;
           });
 
-          setCoins((value) => value + Math.floor(maxHP));
+          setCoins((value) => value + getEnemyKillDropCoins());
           return 0;
         }
 
@@ -692,7 +704,7 @@ function App() {
     }, 1000);
 
     return () => clearInterval(autoTapTimer);
-  }, [autoTapRate, isHydrated, maxHP, recordMutation]);
+  }, [autoTapRate, getEnemyKillDropCoins, isHydrated, maxHP, recordMutation]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 960px)");
@@ -883,9 +895,16 @@ function App() {
         return nextStage;
       });
 
-      setCoins((value) => value + Math.floor(maxHP));
+      setCoins((value) => value + getEnemyKillDropCoins());
     }
-  }, [bossHP, isHydrated, maxHP, recordMutation, tapDamage]);
+  }, [
+    bossHP,
+    getEnemyKillDropCoins,
+    isHydrated,
+    maxHP,
+    recordMutation,
+    tapDamage,
+  ]);
 
   const handleLogout = useCallback(async () => {
     setAuthError("");

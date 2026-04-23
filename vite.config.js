@@ -15,7 +15,10 @@ export default defineConfig({
       ],
       manifest: false,
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,json,woff2}"],
+        globPatterns: [
+          "**/*.{js,css,html,ico,png,svg,webp,json,woff2,mp3,ogg,wav,m4a,mp4,webm}",
+        ],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: "/index.html",
         cleanupOutdatedCaches: true,
         runtimeCaching: [
@@ -61,6 +64,23 @@ export default defineConfig({
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
+          {
+            urlPattern: ({ request, url }) =>
+              request.destination === "audio" ||
+              request.destination === "video" ||
+              /\/music\//.test(url.pathname),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "app-media-assets",
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 60 * 60 * 24 * 90,
               },
             },
           },
