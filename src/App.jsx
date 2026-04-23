@@ -24,7 +24,7 @@ import EventSection from "./features/game/sections/EventSection";
 import ManagementSection from "./features/game/sections/ManagementSection";
 import SettingsSection from "./features/game/sections/SettingsSection";
 import { getPurchasePlan } from "./features/game/utils/economy";
-import { getTapDamage, resolveTapHit } from "./features/game/utils/tap";
+import { getTapDamage } from "./features/game/utils/tap";
 import { getEnemyDrops } from "./features/game/drops";
 import { getCropByStage, getCropHP } from "./features/crops/cropsData";
 import {
@@ -859,47 +859,39 @@ function App() {
     [buyQuantity, coins, farmers, isHydrated, recordMutation],
   );
 
-  const handleTap = useCallback(() => {
-    if (bossHP <= 0) {
-      return;
-    }
+  const handleTap = useCallback(
+    (tapResult) => {
+      if (bossHP <= 0 || !tapResult) {
+        return;
+      }
 
-    const { damage, nextHP, nextPercent, isDefeated } = resolveTapHit({
-      bossHP,
-      maxHP,
-      damage: tapDamage,
-    });
+      const { damage, nextHP, nextPercent, isDefeated } = tapResult;
 
-    playTapHitSound(damage);
+      playTapHitSound(damage);
 
-    setBossHP(nextHP);
-    hpTrailTargetRef.current = nextPercent;
+      setBossHP(nextHP);
+      hpTrailTargetRef.current = nextPercent;
 
-    if (isDefeated) {
-      setCurrentStage((stage) => {
-        const nextStage = stage + 1;
+      if (isDefeated) {
+        setCurrentStage((stage) => {
+          const nextStage = stage + 1;
 
-        if (isHydrated) {
-          recordMutation("STAGE_ADVANCED", {
-            fromStage: stage,
-            toStage: nextStage,
-            source: "manual",
-          });
-        }
+          if (isHydrated) {
+            recordMutation("STAGE_ADVANCED", {
+              fromStage: stage,
+              toStage: nextStage,
+              source: "manual",
+            });
+          }
 
-        return nextStage;
-      });
+          return nextStage;
+        });
 
-      setCoins((value) => value + getEnemyKillDropCoins());
-    }
-  }, [
-    bossHP,
-    getEnemyKillDropCoins,
-    isHydrated,
-    maxHP,
-    recordMutation,
-    tapDamage,
-  ]);
+        setCoins((value) => value + getEnemyKillDropCoins());
+      }
+    },
+    [bossHP, getEnemyKillDropCoins, isHydrated, recordMutation],
+  );
 
   const handleLogout = useCallback(async () => {
     setAuthError("");
@@ -938,6 +930,7 @@ function App() {
         maxHP={maxHP}
         crop={getCropByStage(currentStage)}
         onTap={handleTap}
+        tapDamage={tapDamage}
         timerPercent={timerPercent}
         hpTrailPercent={hpTrailPercent}
       />
