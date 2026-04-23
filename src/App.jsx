@@ -24,6 +24,7 @@ import EventSection from "./features/game/sections/EventSection";
 import ManagementSection from "./features/game/sections/ManagementSection";
 import SettingsSection from "./features/game/sections/SettingsSection";
 import { getPurchasePlan } from "./features/game/utils/economy";
+import { getTapDamage, resolveTapHit } from "./features/game/utils/tap";
 import { getEnemyDrops } from "./features/game/drops";
 import { getCropByStage, getCropHP } from "./features/crops/cropsData";
 import {
@@ -523,16 +524,10 @@ function App() {
     [farmers],
   );
 
-  const tapDamage = useMemo(() => {
-    const baseDamage = tapUpgrades.reduce(
-      (total, upgrade) => total + upgrade.level * upgrade.dmgPerLevel,
-      1,
-    );
-
-    const farmerBonusMultiplier =
-      1 + farmers.reduce((total, farmer) => total + farmer.owned * 0.02, 0);
-    return Math.ceil(baseDamage * farmerBonusMultiplier);
-  }, [tapUpgrades, farmers]);
+  const tapDamage = useMemo(
+    () => getTapDamage({ tapUpgrades, farmers }),
+    [tapUpgrades, farmers],
+  );
 
   const getEnemyKillDropCoins = useCallback(() => {
     const { coins: droppedCoins } = getEnemyDrops({
@@ -869,18 +864,18 @@ function App() {
       return;
     }
 
-    const damage = tapDamage;
-    playTapHitSound(damage);
-    const newHP = bossHP - damage;
-    const nextPercent = maxHP > 0 ? Math.max(0, (newHP / maxHP) * 100) : 0;
+    const { damage, nextHP, nextPercent, isDefeated } = resolveTapHit({
+      bossHP,
+      maxHP,
+      damage: tapDamage,
+    });
 
-    setBossHP(newHP);
+    playTapHitSound(damage);
+
+    setBossHP(nextHP);
     hpTrailTargetRef.current = nextPercent;
 
-    const coinsPerTap = Math.floor(damage * 0.1);
-    //setCoins((value) => value + coinsPerTap);
-
-    if (newHP <= 0) {
+    if (isDefeated) {
       setCurrentStage((stage) => {
         const nextStage = stage + 1;
 
